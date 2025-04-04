@@ -1,0 +1,10 @@
+Classification Report
+              precision    recall  f1-score   support
+
+       Dubai       0.84      0.79      0.81        33
+      Ottawa       0.80      0.97      0.88        33
+       Tokyo       0.89      0.76      0.82        33
+
+    accuracy                           0.84        99
+   macro avg       0.84      0.84      0.84        99
+weighted avg       0.84      0.84      0.84        99

@@ -1,18 +1,21 @@
-import numpy as np
-import tensorflow as tf
-from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
+from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator
 from keras._tf_keras.keras.applications import MobileNetV2
 from keras._tf_keras.keras.applications.mobilenet_v2 import preprocess_input
 from keras._tf_keras.keras.layers import GlobalAveragePooling2D, Dense, Dropout
 from keras._tf_keras.keras.models import Model
-from keras._tf_keras.keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras._tf_keras.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from keras._tf_keras.keras.optimizers import Adam
 
-# Define the data generator with augmentation and validation split
+# Define the data generator with enhanced augmentation and validation split
 train_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,  # MobileNetV2-specific preprocessing
     horizontal_flip=True,                    # Flip images horizontally
     rotation_range=10,                       # Rotate up to 10 degrees
     zoom_range=0.1,                         # Zoom in/out by 10%
+    shear_range=0.2,                         # Shear transformations
+    width_shift_range=0.2,                   # Horizontal shifts
+    height_shift_range=0.2,                  # Vertical shifts
+    brightness_range=[0.8, 1.2],             # Brightness adjustments
     validation_split=0.2                     # 20% for validation
 )
 
@@ -41,22 +44,23 @@ base_model = MobileNetV2(
     input_shape=(224, 224, 3)                # Input shape: 224x224 RGB images
 )
 
-# Build custom top layers
+# Build custom top layers with an additional dense layer
 x = base_model.output
 x = GlobalAveragePooling2D()(x)              # Reduce spatial dimensions
-x = Dropout(0.5)(x)                          # Add dropout to prevent overfitting
+x = Dropout(0.5)(x)                          # Dropout to prevent overfitting
+x = Dense(128, activation='relu')(x)         # Dense layer for more complexity
 predictions = Dense(3, activation='softmax')(x)  # Output layer for 3 classes
 
 # Create the final model
 model = Model(inputs=base_model.input, outputs=predictions)
 
-# Freeze base model layers to retain pre-trained weights
-for layer in base_model.layers:
-    layer.trainable = False
+# Unfreeze the last 20 layers of the base model for fine-tuning
+for layer in base_model.layers[-20:]:
+    layer.trainable = True                   # Enable fine-tuning
 
-# Compile the model
+# Compile the model with a smaller learning rate
 model.compile(
-    optimizer='adam',                        # Adam optimizer
+    optimizer=Adam(learning_rate=1e-4),      # Smaller learning rate for fine-tuning
     loss='categorical_crossentropy',         # Loss for multi-class classification
     metrics=['accuracy']                     # Track accuracy
 )
@@ -64,53 +68,29 @@ model.compile(
 # Define callbacks
 early_stopping = EarlyStopping(
     monitor='val_loss',                      # Monitor validation loss
-    patience=5,                              # Stop after 5 epochs of no improvement
+    patience=10,                             # Increased patience to 10
     restore_best_weights=True                # Restore best weights
 )
 checkpoint = ModelCheckpoint(
-    'best_model.h5',                         # Save model to file
+    'best_model.keras',                      # Save model in .keras format
     monitor='val_accuracy',                  # Save based on validation accuracy
     save_best_only=True                      # Save only the best model
+)
+reduce_lr = ReduceLROnPlateau(               # Reduce learning rate on plateau
+    monitor='val_loss',
+    factor=0.2,                              # Reduce by factor of 0.2
+    patience=3,                              # Wait 3 epochs before reducing
+    min_lr=1e-6                              # Minimum learning rate
 )
 
 # Train the model
 history = model.fit(
     train_generator,
-    epochs=20,                               # Maximum epochs
+    epochs=30,                               # Increased to 30 epochs
     validation_data=validation_generator,
-    callbacks=[early_stopping, checkpoint]   # Apply callbacks
+    callbacks=[early_stopping, checkpoint, reduce_lr]
 )
 
-# Load the best model
-model.load_weights('best_model.h5')
-
-# Get class indices mapping
-class_indices = train_generator.class_indices  # e.g., {'dubai': 0, 'ottawa': 1, 'tokyo': 2}
-index_to_class = {v: k for k, v in class_indices.items()}  # Invert for prediction
-
-# Function to predict city from an image
-def predict_city(image_path):
-    # Load and preprocess the image
-    img = load_img(image_path, target_size=(224, 224))
-    img_array = img_to_array(img)
-    img_array = preprocess_input(img_array)  # Apply MobileNetV2 preprocessing
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-    
-    # Make prediction
-    prediction = model.predict(img_array)
-    predicted_index = np.argmax(prediction, axis=1)[0]
-    predicted_city = index_to_class[predicted_index]
-    confidence = prediction[0][predicted_index]
-    return predicted_city, confidence
-
-# Test images to predict
-test_images = [
-    'testing_images/sample_dubai.jpg',
-    'testing_images/sample_ottawa.jpg',
-    'testing_images/sample_tokyo.jpg'
-]
-
-# Run predictions and print results
-for image_path in test_images:
-    predicted_city, confidence = predict_city(image_path)
-    print(f'The predicted city for {image_path} is {predicted_city} with confidence {confidence:.2f}')
+# Save the final model in .keras format
+model.save('best_model.keras')
+print("Training completed. Model saved to 'best_model.keras'.")

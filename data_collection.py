@@ -12,7 +12,7 @@ load_dotenv()
 API_KEY = os.getenv("GOOGLE_MAPS_API")
 
 # Pictures per city
-TOTAL_PICTURES = 200
+TOTAL_PICTURES = 33
 
 # City boundaries (approximate lat/lon ranges)
 CITY_BOUNDS = {
@@ -22,7 +22,7 @@ CITY_BOUNDS = {
 }
 
 # Image folder path
-BASE_FOLDER = "street_view_images"
+BASE_FOLDER = "testing_images"
 
 # Function to detect "Sorry, No Imagery Here" images
 def is_no_imagery_image(image, brightness_threshold=220, stddev_threshold=15, unique_colors_threshold=1000):
@@ -39,6 +39,7 @@ def is_no_imagery_image(image, brightness_threshold=220, stddev_threshold=15, un
     print(f" - Avg Brightness: {avg_brightness:.2f} (Threshold: {brightness_threshold})")
     print(f" - Brightness Std Dev: {brightness_stddev:.2f} (Threshold: {stddev_threshold})")
     print(f" - Unique Colors: {unique_colors} (Threshold: {unique_colors_threshold})")
+    print()
 
     # Check against defined thresholds
     return avg_brightness > brightness_threshold and brightness_stddev < stddev_threshold and unique_colors < unique_colors_threshold
@@ -104,7 +105,7 @@ def delete_all_images():
 if __name__ == "__main__":
     for city in CITY_BOUNDS.keys():
         count = 0
-        while count < TOTAL_PICTURES - 1:  # Ensure 50 successful
+        while count < TOTAL_PICTURES:  # Ensure 50 successful
             location = generate_random_location(city)
             if fetch_street_view(API_KEY, city, location):
                 count += 1  # Only count successful requests
